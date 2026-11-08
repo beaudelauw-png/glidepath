@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="manifest" href="manifest.json"><link rel="apple-touch-icon" href="icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Glide Path"><meta name="theme-color" content="#0a6cff"><title>Glide Path Calculator</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--fg:#1b1f24;--mut:#667;--acc:#0a6cff;--gnd:#6b8e4e;--line:#d5d9e0}
+@media(prefers-color-scheme:dark){:root{--bg:#12151a;--card:#1b2028;--fg:#e6e9ee;--mut:#9aa3af;--acc:#4c9bff;--gnd:#4f6b3a;--line:#2c333d}}
+*{box-sizing:border-box}body{margin:0;font:15px/1.4 system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+main{max-width:900px;margin:auto;padding:16px}h1{font-size:1.3rem;margin:0 0 12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:16px;flex-wrap:wrap}.row>label{flex:1;min-width:220px}
+label b{font-size:1.4rem;color:var(--acc)}input[type=range]{width:100%}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{background:var(--bg);border-radius:8px;padding:10px}.stat span{color:var(--mut);font-size:.8rem;display:block}.stat b{font-size:1.3rem}
+svg{width:100%;height:auto;display:block}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+td,th{padding:5px 8px;border-bottom:1px solid var(--line);text-align:right}th{color:var(--mut);font-weight:500}
+tr.sel td{background:color-mix(in srgb,var(--acc) 18%,transparent);font-weight:600}
+.btns button{border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:6px;padding:4px 10px;cursor:pointer;margin:2px}
+small{color:var(--mut)}h2{font-size:1.05rem;margin:0 0 8px}
+.num,select{width:100%;padding:8px;font-size:1.1rem;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);margin-top:4px}
+select{width:auto;padding:2px 4px;font-size:.9rem}.res{display:block;margin-top:6px;font-size:1.15rem;font-weight:600;color:var(--acc)}
+</style></head><body><main>
+<h1>✈️ Glide Path: distance vs height</h1>
+<div class="card row">
+ <label>Glide path angle: <b id="aV"></b>°<input id="a" type="range" min="1" max="7" step="0.1" value="3">
+  <span class="btns"><button data-a="2.5">2.5°</button><button data-a="3">3°</button><button data-a="3.5">3.5°</button><button data-a="4.5">4.5°</button><button data-a="5.5">5.5°</button></span></label>
+ <label>Distance from threshold: <b id="dV"></b> NM<input id="d" type="range" min="0" max="15" step="0.1" value="5"></label>
+ <label>Ground speed: <b id="gV"></b> kt<input id="g" type="range" min="60" max="200" step="5" value="140"></label>
+</div>
+<div class="card row">
+ <label>Threshold elevation (ft MSL)<input id="el" type="number" value="0" step="10" class="num"></label>
+ <label>Threshold crossing height, TCH (ft)<input id="tch" type="number" value="50" step="5" class="num"></label>
+</div>
+<div class="card"><h2>Calculator</h2><div class="row">
+ <label>Distance (NM)<input id="cd" type="number" step="0.1" value="4" class="num"><span class="res" id="cdR"></span></label>
+ <label>Height <select id="cm"><option value="agl">above threshold</option><option value="msl">altitude MSL</option></select> (ft)<input id="ch" type="number" step="10" value="1500" class="num"><span class="res" id="chR"></span></label>
+</div></div>
+<div class="card stats">
+ <div class="stat"><span>Height above threshold</span><b id="h"></b></div>
+ <div class="stat"><span>Altitude (MSL)</span><b id="alt"></b></div>
+ <div class="stat"><span>Height per NM</span><b id="pn"></b></div>
+ <div class="stat"><span>Rate of descent</span><b id="rod"></b></div>
+ <div class="stat"><span>Gradient</span><b id="gr"></b></div>
+</div>
+<div class="card"><svg id="s" viewBox="0 0 800 300"></svg>
+<small>Vertical scale exaggerated for clarity. Drag on the chart to move the aircraft.</small></div>
+<div class="card"><table><thead><tr><th>Distance (NM)</th><th>Height (ft)</th><th>Altitude MSL (ft)</th><th>Height (m)</th></tr></thead><tbody id="t"></tbody></table>
+<small>Rule of thumb (3°): height ≈ 300 ft × NM (exact ≈ 318 ft/NM). ROD ≈ GS × 5. Heights include TCH; altitude = height + threshold elevation. Earth curvature ignored.</small></div>
+</main><script>
+const $=id=>document.getElementById(id),FT=6076.12,MAXD=15;
+const fpnm=a=>FT*Math.tan(a*Math.PI/180);
+function draw(){
+ const a=+$('a').value,d=+$('d').value,g=+$('g').value,k=fpnm(a),el=+$('el').value||0,tch=+$('tch').value||0,h=tch+d*k;
+ const cd=+$('cd').value||0,ch=+$('ch').value||0,ch0=$('cm').value=='msl'?ch-el:ch,dist=(ch0-tch)/k;
+ $('cdR').textContent=`→ ${Math.round(tch+cd*k).toLocaleString()} ft above thr · ${Math.round(el+tch+cd*k).toLocaleString()} ft MSL`;
+ $('chR').textContent=dist<0?'→ below glide path at threshold':`→ ${dist.toFixed(2)} NM from threshold`;
+ $('aV').textContent=a.toFixed(1);$('dV').textContent=d.toFixed(1);$('gV').textContent=g;
+ $('h').textContent=Math.round(h).toLocaleString()+' ft';$('alt').textContent=Math.round(h+el).toLocaleString()+' ft';$('pn').textContent=Math.round(k)+' ft/NM';
+ $('rod').textContent=Math.round(k*g/60)+' fpm';$('gr').textContent=(Math.tan(a*Math.PI/180)*100).toFixed(1)+' %';
+ // chart: x from 40 (15NM) to 760 (0NM); y ground 260, top 20 => fixed max height 7°@15NM
+ const W=720,X=n=>760-n/MAXD*W,maxH=fpnm(7)*MAXD+Math.max(0,tch),Y=f=>260-f/maxH*240;
+ let s=`<rect x="0" y="260" width="800" height="40" fill="var(--gnd)"/><rect x="740" y="256" width="40" height="4" fill="var(--fg)"/>`;
+ for(let n=0;n<=MAXD;n++)s+=`<line x1="${X(n)}" y1="260" x2="${X(n)}" y2="${n%5?265:272}" stroke="var(--fg)"/>`+(n%5?'':`<text x="${X(n)}" y="290" fill="var(--fg)" font-size="12" text-anchor="middle">${n} NM</text>`);
+ for(let f=1000;f<maxH;f+=1000)s+=`<line x1="40" x2="760" y1="${Y(f)}" y2="${Y(f)}" stroke="var(--line)"/><text x="4" y="${Y(f)+4}" fill="var(--mut)" font-size="11">${f/1000}k ft</text>`;
+ if(a!=3)s+=`<line x1="${X(0)}" y1="${Y(tch)}" x2="${X(MAXD)}" y2="${Y(tch+fpnm(3)*MAXD)}" stroke="var(--mut)" stroke-dasharray="5 5"/><text x="${X(MAXD)+4}" y="${Y(tch+fpnm(3)*MAXD)-6}" fill="var(--mut)" font-size="11">3° ref</text>`;
+ s+=`<line x1="${X(0)}" y1="${Y(tch)}" x2="${X(MAXD)}" y2="${Y(tch+k*MAXD)}" stroke="var(--acc)" stroke-width="3"/>`;
+ s+=`<line x1="${X(d)}" y1="260" x2="${X(d)}" y2="${Y(h)}" stroke="var(--acc)" stroke-dasharray="3 3"/>`;
+ s+=`<text x="${X(d)}" y="${Y(h)+5}" font-size="22" text-anchor="middle" transform="rotate(${a} ${X(d)} ${Y(h)})">✈</text>`;
+ s+=`<text x="${X(d)+(d>12?-10:10)}" y="${Y(h)-14}" fill="var(--fg)" font-size="13" font-weight="600" text-anchor="${d>12?'end':'start'}">${Math.round(h)} ft @ ${d.toFixed(1)} NM</text>`;
+ $('s').innerHTML=s;
+ let t='';for(let n=0;n<=10;n++)t+=`<tr class="${Math.abs(n-d)<.05?'sel':''}"><td>${n}</td><td>${Math.round(tch+n*k).toLocaleString()}</td><td>${Math.round(el+tch+n*k).toLocaleString()}</td><td>${Math.round((tch+n*k)*.3048).toLocaleString()}</td></tr>`;
+ $('t').innerHTML=t;
+}
+['a','d','g','el','tch','cd','ch','cm'].forEach(i=>$(i).oninput=draw);
+document.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{$('a').value=b.dataset.a;draw()});
+const drag=e=>{if(e.buttons!==1&&e.type!=='pointerdown')return;const r=$('s').getBoundingClientRect(),x=(e.clientX-r.left)/r.width*800;$('d').value=Math.max(0,Math.min(MAXD,(760-x)/720*MAXD)).toFixed(1);draw()};
+$('s').onpointerdown=drag;$('s').onpointermove=drag;
+draw();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
+</script></body></html>
